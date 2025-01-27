@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book a Ride - Community Carpooling</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        #map {
+            width: 100%;
+            height: 600px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">
+                    <img src="https://uploads.mesym.com/wp-content/uploads/mesym/2014/09/tripda-icon-1.png" alt="Logo" width="50" height="50">
+                    Community Carpooling
+                </a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+                    <div class="navbar-nav ml-auto">
+                        <a class="nav-link" href="index.html"><i class="fas fa-home"></i> Home</a>
+                        <a class="nav-link active" href="book_ride.html"><i class="fas fa-ticket-alt"></i> Book a Ride <span class="sr-only">(current)</span></a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h2 class="my-4">Book a Ride</h2>
+        <form id="bookRideForm" action="book_ride.php" method="POST">
+            <div class="form-group">
+                <label for="destination_location">Destination Location:</label>
+                <input type="text" id="destination_location" name="destination_location" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="ride_date">Date:</label>
+                <input type="date" id="ride_date" name="ride_date" class="form-control" required>
+            </div>
+            <button type="button" class="btn btn-primary" onclick="fetchAvailableRides()">Check Availability</button>
+
+            <div id="availableRides" style="display:none;">
+                <h3 class="my-4">Available Rides</h3>
+                <div class="form-group">
+                    <label for="ride_select">Select a Ride:</label>
+                    <select id="ride_select" name="ride_id" class="form-control" required>
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="ride_time">Time:</label>
+                    <input type="text" id="ride_time" name="ride_time" class="form-control" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="available_seats">Available Seats:</label>
+                    <input type="text" id="available_seats" name="available_seats" class="form-control" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="seats_to_book">Seats to Book:</label>
+                    <input type="number" id="seats_to_book" name="seats_to_book" class="form-control" min="1" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Book Ride</button>
+            </div>
+        </form>
+        
+        <div id="map" class="my-4"></div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        function fetchAvailableRides() {
+            const destination = document.getElementById('destination_location').value;
+            const rideDate = document.getElementById('ride_date').value;
+
+            fetch(`fetch_rides.php?destination_location=${destination}&ride_date=${encodeURIComponent(rideDate)}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data); // Log the data to verify the format
+
+                    const rideSelect = document.getElementById('ride_select');
+                    const availableRidesDiv = document.getElementById('availableRides');
+                    const rideTime = document.getElementById('ride_time');
+                    const availableSeats = document.getElementById('available_seats');
+
+                    // Clear previous options and hide available rides section
+                    rideSelect.innerHTML = '';
+                    availableRidesDiv.style.display = 'none';
+
+                    if (Array.isArray(data)) {
+                        if (data.length === 0) {
+                            alert('No available rides for the selected destination and date.');
+                            return;
+                        }
+
+                        // Populate select options with available rides
+                        data.forEach(ride => {
+                            const option = document.createElement('option');
+                            option.value = ride.ride_id;
+                            option.text = `${ride.origin} to ${ride.destination} at ${ride.time}`;
+                            option.setAttribute('data-time', ride.time);
+                            option.setAttribute('data-seats', ride.available_seats);
+                            rideSelect.appendChild(option);
+                        });
+
+                        // Show the available rides section
+                        availableRidesDiv.style.display = 'block';
+
+                        // Update ride details on selection change
+                        rideSelect.addEventListener('change', function() {
+                            const selectedOption = rideSelect.options[rideSelect.selectedIndex];
+                            rideTime.value = selectedOption.getAttribute('data-time');
+                            availableSeats.value = selectedOption.getAttribute('data-seats');
+                        });
+
+                        // Trigger change event to display details of the first available ride
+                        rideSelect.dispatchEvent(new Event('change'));
+                    } else if (data.error) {
+                        console.error(data.error);
+                        alert(`Error: ${data.error}`);
+                    } else {
+                        console.error('Expected an array but received:', data);
+                        alert('Error fetching available rides. Please try again.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error fetching available rides. Please try again.');
+                });
+        }
+
+
+
+        // Initialize and add the map using Leaflet.js with OpenStreetMap
+        function initMap() {
+            var map = L.map('map').setView([15.9129, 79.73999], 13); // Coordinates for Andhra Pradesh
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 18
+            }).addTo(map);
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            initMap();
+        });
+    </script>
+
+    <footer class="bg-dark text-white text-center py-4">
+        <h3 class="mb-3">✨ Creative Minds of ✨</h3>
+        <p class="mb-2"><i class="fas fa-user-graduate"></i> Mangireddygari Reshma: <span class="text-warning">22102A040916</span> 🎓</p>
+        <p class="mb-2"><i class="fas fa-user-graduate"></i> Kuniti Prabhavati: <span class="text-warning">22102A040887</span> 🎓</p>
+        <p class="mb-2"><i class="fas fa-user-graduate"></i> Majjiga Sai Kavya: <span class="text-warning">22102A040907</span> 🎓</p>
+        <p class="mb-2"><i class="fas fa-user-graduate"></i> Kukkati Nikhitha: <span class="text-warning">22102A040884</span> 🎓</p>
+        <p class="mb-2"><i class="fas fa-user-graduate"></i> Mallineni Nandini: <span class="text-warning">22102A040910</span> 🎓</p>
+        <div class="mt-4">
+            <a href="https://github.com" class="text-white mr-3 ml-3" aria-label="GitHub"><i class="fab fa-github fa-2x"></i></a>
+            <a href="https://linkedin.com" class="text-white mr-3 ml-3" aria-label="LinkedIn"><i class="fab fa-linkedin fa-2x"></i></a>
+            <a href="https://twitter.com" class="text-white mr-3 ml-3" aria-label="Twitter"><i class="fab fa-twitter fa-2x"></i></a>
+        </div>
+    <p class="mt-3 text-muted">Made with <i class="fas fa-heart text-danger animated heartBeat infinite"></i> by the Team</p>
+</footer>
+</body>
+</html>
